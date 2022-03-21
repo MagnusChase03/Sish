@@ -4,18 +4,168 @@
 #include <unistd.h>
 #include <sys/types.h>
 
-int main()
+// Clear out history
+void clearHist(char *history[100], int *historyIndex)
 {
 
-    char *history[100];
-    int historyIndex = 0;
-
-    // Zero out history
+    *historyIndex = 0;
     for (int i = 0; i < 100; i++)
     {
 
         history[i] = '\0';
     }
+}
+
+// Clear commands
+void clearCommands(char *commands[100][100])
+{
+
+    for (int i = 0; i < 100; i++)
+    {
+
+        for (int j = 0; j < 100; j++)
+        {
+
+            commands[i][j] = '\0';
+        }
+    }
+}
+
+// Execute a simple command
+void executeCommand(char *command[100])
+{
+
+    // Fork
+    pid_t childPID = fork();
+    if (childPID == -1)
+    {
+
+        perror("Fork creation failed");
+    }
+    else if (childPID == 0)
+    {
+
+        // Execute command
+        execvp(command[0], command);
+        perror("No command found");
+    }
+    else
+    {
+
+        waitpid(childPID, NULL, 0);
+    }
+}
+
+// Parse into command
+void parseComand(char *commands[100][100], char *command, int *commandNum)
+{
+
+    char *pipeDelim = "|\0";
+    char *spaceDelim = " \0";
+    char *pipeSave;
+    char *spaceSave;
+
+    // Split on |
+    char *pipeToken = strtok_r(command, pipeDelim, &pipeSave);
+    while (pipeToken != NULL)
+    {
+
+        // Split on spaces
+        int argumentNum = 0;
+        char *spaceToken = strtok_r(pipeToken, spaceDelim, &spaceSave);
+        while (spaceToken != NULL)
+        {
+
+            // Add the command argument to the list
+            commands[*commandNum][argumentNum] = spaceToken;
+
+            argumentNum += 1;
+            spaceToken = strtok_r(NULL, spaceDelim, &spaceSave);
+        }
+
+        *commandNum += 1;
+        pipeToken = strtok_r(NULL, pipeDelim, &pipeSave);
+    }
+}
+
+// Handle custom commands
+int executeCustomCommand(char *command[100], char *history[100], int *historyIndex)
+{
+
+    // Exit Command
+    if (strcmp(command[0], "exit") == 0)
+    {
+
+        return 2;
+    }
+
+    // Cd Command
+    else if (strcmp(command[0], "cd") == 0)
+    {
+
+        if (chdir(command[1]) == -1)
+        {
+
+            perror("Could not change directory");
+            return 0;
+        }
+        return 0;
+    }
+
+    // History command
+    else if (strcmp(command[0], "history") == 0)
+    {
+
+        // Clear history
+        if (command[1] != NULL && strcmp(command[1], "-c") == 0)
+        {
+
+            clearHist(history, historyIndex);
+            return 0;
+        }
+
+        // Grab history index
+        else if (command[1] != NULL)
+        {
+
+            int index = atoi(command[1]);
+
+            if (index < *historyIndex)
+            {
+
+                printf("%d %s\n", index, history[index]);
+                return 0;
+            }
+            else
+            {
+
+                printf("Index out of range\n");
+                return 0;
+            }
+        }
+
+        // Print history
+        else
+        {
+
+            for (int i = 0; i < *historyIndex; i++)
+            {
+
+                printf("%d %s\n", i, history[i]);
+            }
+
+            return 0;
+        }
+        return 1;
+    }
+}
+
+int main()
+{
+
+    char *history[100];
+    int historyIndex = 0;
+    clearHist(history, &historyIndex);
 
     // Shell Loop
     while (1 == 1)
@@ -31,92 +181,26 @@ int main()
 
         // Parse command line into seperated piped commands
         char *commands[100][100];
-
-        // Zero out array bc sometimes has extra junk
-        for (int i = 0; i < 100; i++)
-        {
-
-            for (int j = 0; j < 100; j++)
-            {
-
-                commands[i][j] = '\0';
-            }
-        }
-
-        // Parse command line into seperated piped commands
-        char *pipeDelim = "|\0";
-        char *spaceDelim = " \0";
-        char *pipeSave;
-        char *spaceSave;
+        clearCommands(commands);
 
         int commandNum = 0;
-        char *pipeToken = strtok_r(command, pipeDelim, &pipeSave);
-        while (pipeToken != NULL)
-        {
-
-            int argumentNum = 0;
-            char *spaceToken = strtok_r(pipeToken, spaceDelim, &spaceSave);
-            while (spaceToken != NULL)
-            {
-
-                commands[commandNum][argumentNum] = spaceToken;
-
-                argumentNum += 1;
-                spaceToken = strtok_r(NULL, spaceDelim, &spaceSave);
-            }
-
-            commandNum += 1;
-            pipeToken = strtok_r(NULL, pipeDelim, &pipeSave);
-        }
+        parseComand(commands, command, &commandNum);
 
         // Add command to history
         history[historyIndex] = command;
         historyIndex += 1;
 
         // Custom Commands
-        if (strcmp(commands[0][0], "exit") == 0)
+        int retVal = executeCustomCommand(commands[0], history, &historyIndex);
+        if (retVal == 2)
         {
 
             return 0;
         }
-        else if (strcmp(commands[0][0], "cd") == 0)
+        else if (retVal == 0)
         {
 
-            if (chdir(commands[0][1]) == -1)
-            {
-
-                perror("Could not change directory");
-            }
-        }
-
-        else if (strcmp(commands[0][0], "history") == 0)
-        {
-
-            if (commands[0][1] != NULL && strcmp(commands[0][1], "-c") == 0)
-            {
-
-                historyIndex = 0;
-                for (int i = 0; i < 100; i++)
-                {
-
-                    history[i] = '\0';
-                }
-            }
-            else if (commands[0][1] != NULL)
-            {
-
-                int index = atoi(commands[0][1]);
-                printf("%d %s\n", index, history[index]);
-            }
-            else
-            {
-
-                for (int i = 0; i < historyIndex; i++)
-                {
-
-                    printf("%d %s\n", i, history[i]);
-                }
-            }
+            continue;
         }
 
         // If Piped command
@@ -130,12 +214,14 @@ int main()
             for (int i = 0; i < commandNum - 1; i++)
             {
 
+                // Create pipe
                 if (pipe(pipe1) == -1)
                 {
 
                     perror("Pipe creation failed");
                 }
 
+                // Create fork
                 pid_t childPID = fork();
                 if (childPID == -1)
                 {
@@ -145,6 +231,7 @@ int main()
                 else if (childPID == 0)
                 {
 
+                    // Set input to last pipe and close
                     if (input != STDIN_FILENO)
                     {
 
@@ -152,17 +239,20 @@ int main()
                         close(input);
                     }
 
+                    // Set output to pipe and close
                     dup2(pipe1[1], STDOUT_FILENO);
                     close(pipe1[1]);
 
+                    // Execute Command
                     execvp(commands[i][0], commands[i]);
-                    return 1;
+                    perror("No command found");
                 }
                 else
                 {
 
                     waitpid(childPID, NULL, 0);
 
+                    // Close input
                     if (input != STDIN_FILENO)
                     {
 
@@ -185,21 +275,23 @@ int main()
             else if (childPID == 0)
             {
 
+                // Grab input and close pipes
                 dup2(input, STDIN_FILENO);
                 close(input);
 
                 close(pipe1[0]);
                 close(pipe1[1]);
 
+                // Execute command
                 execvp(commands[commandNum - 1][0], commands[commandNum - 1]);
-                return 1;
+                perror("No command found");
             }
             else
             {
 
-                // Close all pipes
                 waitpid(childPID, NULL, 0);
 
+                // Close all pipes
                 close(input);
                 close(pipe1[0]);
                 close(pipe1[1]);
@@ -209,23 +301,7 @@ int main()
         {
 
             // Execute Command with no pipes
-            pid_t childPID = fork();
-            if (childPID == -1)
-            {
-
-                perror("Fork creation failed");
-            }
-            else if (childPID == 0)
-            {
-
-                execvp(commands[0][0], commands[0]);
-                return 1;
-            }
-            else
-            {
-
-                waitpid(childPID, NULL, 0);
-            }
+            executeCommand(commands[0]);
         }
     }
 
