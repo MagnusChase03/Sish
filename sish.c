@@ -142,14 +142,14 @@ int main() {
         // If Piped command
         if (commandNum - 1 > 0) {
 
-            int input, pipe1[2];
-            input = STDIN_FILENO;
+            int input = STDIN_FILENO;
+            int pipe1[2];
 
-            for (int j = 0; j < commandNum - 1; j++) {
+            for (int i = 0; i < commandNum - 1; i++) {
 
                 pipe(pipe1);
-                int childPID = fork();
 
+                pid_t childPID = fork();
                 if (childPID == 0) {
 
                     if (input != STDIN_FILENO) {
@@ -162,24 +162,47 @@ int main() {
                     dup2(pipe1[1], STDOUT_FILENO);
                     close(pipe1[1]);
 
-                    execvp(commands[j][0], commands[j]);
+                    execvp(commands[i][0], commands[i]);
+                    return 1;
+
+                } else {
+
+                    waitpid(childPID, NULL, 0);
+
+                    if (input != STDIN_FILENO) {
+
+                        close(input);
+
+                    }
+
+                    input = pipe1[0];
+                    close(pipe1[1]);
 
                 }
 
-                close(input);
-                close(pipe1[1]);
-                input = pipe1[0];
-
             }
 
-            if (input != STDIN_FILENO) {
+            pid_t childPID = fork();
+            if (childPID == 0) {
 
                 dup2(input, STDIN_FILENO);
                 close(input);
 
-            }
+                close(pipe1[0]);
+                close(pipe1[1]);
 
-            execvp(commands[commandNum - 1][0], commands[commandNum - 1]);
+                execvp(commands[commandNum - 1][0], commands[commandNum - 1]);
+                return 1;
+
+            } else {
+
+                waitpid(childPID, NULL, 0);
+
+                close(input);
+                close(pipe1[0]);
+                close(pipe1[1]);
+
+            }
 
         } else {
 
@@ -188,6 +211,7 @@ int main() {
             if (childPID == 0) {
 
                 execvp(commands[0][0], commands[0]);
+                return 1;
 
             } else {
 
