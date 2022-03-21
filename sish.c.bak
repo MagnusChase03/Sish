@@ -1,0 +1,124 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
+
+int main() {
+
+    char* history[100];
+    int historyIndex = 0;
+
+    // Main Loop
+    while (1 == 1) {
+
+        printf("\nsish> ");
+
+        // Gets Input From STDIN
+        char* command = (char*) malloc(sizeof(char) * 100);
+        size_t commandSize = sizeof(command);
+
+        getline(&command, &commandSize, stdin);
+        command[strlen(command) - 1] = '\0';
+
+        // Splits Input On Space
+        const char delim = ' ';
+        char* splitCommand = strtok(command, &delim);
+
+        // Get Command Arguments
+        char* execCommand[100];
+        execCommand[0] = splitCommand;
+
+        int index = 1;
+        splitCommand = strtok(NULL, &delim);
+        while (splitCommand != NULL) {
+
+            execCommand[index] = splitCommand;
+            splitCommand = strtok(NULL, &delim);
+            index += 1;    
+
+        }
+        execCommand[index] = NULL;
+
+        // Save to history
+        char historyIndexStr[3];
+        sprintf(historyIndexStr, "%d", historyIndex);
+
+        char* historyLog = malloc(sizeof(char) * 100);
+        strcat(historyLog, historyIndexStr);
+        strcat(historyLog, " ");
+        strcat(historyLog, execCommand[0]);
+
+        history[historyIndex] = historyLog;
+        historyIndex += 1;
+
+        // Custom Commands
+        if (strcmp(execCommand[0], "exit") == 0) {
+
+            return 0;
+
+        } else if (strcmp(execCommand[0], "cd") == 0) {
+
+            chdir(execCommand[1]);
+            continue;
+
+        } else if (strcmp(execCommand[0], "history") == 0) {
+
+            if (execCommand[1] == NULL) {
+
+                for (int i = 0; i < historyIndex; i++) {
+
+                    printf("%s\n", history[i]);
+
+                }
+
+            } else if (strcmp(execCommand[1], "-c") == 0) {
+
+                for (int i = 0; i < historyIndex; i++) {
+
+                    history[historyIndex] = NULL;
+                    historyIndex = 0;
+
+                }
+
+            } else {
+
+                int tmpIndex = atoi(execCommand[1]);
+
+                if (tmpIndex < historyIndex && tmpIndex >= 0) {
+                
+                    printf("%s\n", history[tmpIndex]);
+
+                } else {
+
+                    printf("%d is not a valid index\n", tmpIndex);
+
+                }
+
+            }
+
+            continue;
+
+        }
+
+        // Run the command
+        pid_t childPID = fork();
+        if (childPID == 0) {
+
+            execvp(execCommand[0], execCommand);
+            printf("No such command %s\n", execCommand[0]);
+            return 1;
+
+        } else {
+
+            wait(NULL);
+
+        }
+
+        free(command);
+
+    }
+
+    return 0;
+
+}
