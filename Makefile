@@ -1,5 +1,2 @@
-sish: sish.c clean
+sish: sish.c
 	gcc -o sish sish.c
-
-clean:
-	rm sish

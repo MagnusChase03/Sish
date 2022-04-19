@@ -156,7 +156,101 @@ int executeCustomCommand(char *command[100], char *history[100], int *historyInd
 
             return 0;
         }
-        return 1;
+    }
+    return 1;
+}
+
+void executePipedCommand(char *commands[100][100], int commandNum)
+{
+
+    int input = STDIN_FILENO;
+    int pipe1[2];
+
+    // Pipe the input of first command to the next strting with stdin
+    for (int i = 0; i < commandNum - 1; i++)
+    {
+
+        // Create pipe
+        if (pipe(pipe1) == -1)
+        {
+
+            perror("Pipe creation failed");
+        }
+
+        // Create fork
+        pid_t childPID = fork();
+        if (childPID == -1)
+        {
+
+            perror("Fork creation failed");
+        }
+        else if (childPID == 0)
+        {
+
+            // Set input to last pipe and close
+            if (input != STDIN_FILENO)
+            {
+
+                dup2(input, STDIN_FILENO);
+                close(input);
+            }
+
+            // Set output to pipe and close
+            dup2(pipe1[1], STDOUT_FILENO);
+            close(pipe1[1]);
+
+            // Execute Command
+            execvp(commands[i][0], commands[i]);
+            perror("No command found");
+        }
+        else
+        {
+
+            waitpid(childPID, NULL, 0);
+
+            // Close input
+            if (input != STDIN_FILENO)
+            {
+
+                close(input);
+            }
+
+            // Set input to be the output
+            input = pipe1[0];
+            close(pipe1[1]);
+        }
+    }
+
+    // Execute last command to stdout
+    pid_t childPID = fork();
+    if (childPID == -1)
+    {
+
+        perror("Fork creation failed");
+    }
+    else if (childPID == 0)
+    {
+
+        // Grab input and close pipes
+        dup2(input, STDIN_FILENO);
+        close(input);
+
+        close(pipe1[0]);
+        close(pipe1[1]);
+
+        // Execute command
+        execvp(commands[commandNum - 1][0], commands[commandNum - 1]);
+        perror("No command found");
+    }
+    else
+    {
+
+        waitpid(childPID, NULL, 0);
+
+        // Close all pipes
+        close(input);
+        close(pipe1[0]);
+        close(pipe1[1]);
     }
 }
 
@@ -207,95 +301,7 @@ int main()
         if (commandNum - 1 > 0)
         {
 
-            int input = STDIN_FILENO;
-            int pipe1[2];
-
-            // Pipe the input of first command to the next strting with stdin
-            for (int i = 0; i < commandNum - 1; i++)
-            {
-
-                // Create pipe
-                if (pipe(pipe1) == -1)
-                {
-
-                    perror("Pipe creation failed");
-                }
-
-                // Create fork
-                pid_t childPID = fork();
-                if (childPID == -1)
-                {
-
-                    perror("Fork creation failed");
-                }
-                else if (childPID == 0)
-                {
-
-                    // Set input to last pipe and close
-                    if (input != STDIN_FILENO)
-                    {
-
-                        dup2(input, STDIN_FILENO);
-                        close(input);
-                    }
-
-                    // Set output to pipe and close
-                    dup2(pipe1[1], STDOUT_FILENO);
-                    close(pipe1[1]);
-
-                    // Execute Command
-                    execvp(commands[i][0], commands[i]);
-                    perror("No command found");
-                }
-                else
-                {
-
-                    waitpid(childPID, NULL, 0);
-
-                    // Close input
-                    if (input != STDIN_FILENO)
-                    {
-
-                        close(input);
-                    }
-
-                    // Set input to be the output
-                    input = pipe1[0];
-                    close(pipe1[1]);
-                }
-            }
-
-            // Execute last command to stdout
-            pid_t childPID = fork();
-            if (childPID == -1)
-            {
-
-                perror("Fork creation failed");
-            }
-            else if (childPID == 0)
-            {
-
-                // Grab input and close pipes
-                dup2(input, STDIN_FILENO);
-                close(input);
-
-                close(pipe1[0]);
-                close(pipe1[1]);
-
-                // Execute command
-                execvp(commands[commandNum - 1][0], commands[commandNum - 1]);
-                perror("No command found");
-            }
-            else
-            {
-
-                waitpid(childPID, NULL, 0);
-
-                // Close all pipes
-                close(input);
-                close(pipe1[0]);
-                close(pipe1[1]);
-            }
+            executePipedCommand(commands, commandNum);
         }
         else
         {
